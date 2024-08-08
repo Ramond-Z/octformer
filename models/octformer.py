@@ -356,7 +356,8 @@ class OctFormer(torch.nn.Module):
     self.stem_down = stem_down
     drop_ratio = torch.linspace(0, drop_path, sum(num_blocks)).tolist()
 
-    self.patch_embed = PatchEmbed(in_channels, channels[0], stem_down, nempty)
+    if self.stem_down > 0:
+        self.patch_embed = PatchEmbed(in_channels, channels[0], stem_down, nempty)
     self.layers = torch.nn.ModuleList([OctFormerStage(
         dim=channels[i], num_heads=num_heads[i], patch_size=patch_size,
         drop_path=drop_ratio[sum(num_blocks[:i]):sum(num_blocks[:i+1])],
@@ -366,8 +367,9 @@ class OctFormer(torch.nn.Module):
         channels[i], channels[i + 1], kernel_size=[2],
         nempty=nempty) for i in range(self.num_stages - 1)])
 
-  def forward(self, data: torch.Tensor, octree: Octree, depth: int):
-    data = self.patch_embed(data, octree, depth)
+  def forward(self, data: torch.Tensor, octree: Octree, depth: int, return_octree=False):
+    if self.stem_dowm > 0:
+        data = self.patch_embed(data, octree, depth)
     depth = depth - self.stem_down   # current octree depth
     octree = OctreeT(octree, self.patch_size, self.dilation, self.nempty,
                      max_depth=depth, start_depth=depth-self.num_stages+1)
@@ -378,4 +380,7 @@ class OctFormer(torch.nn.Module):
       features[depth_i] = data
       if i < self.num_stages - 1:
         data = self.downsamples[i](data, octree, depth_i)
-    return features
+    if not return_octree:
+        return features
+    else:
+        return features, octree
